@@ -1,5 +1,5 @@
 #Cài trước khi chạy streamlit
-# pip
+
 
 
 import streamlit as st
@@ -72,15 +72,35 @@ if input_type == "Upload Image" and uploaded_file is not None:
     if st.button("Predict"):
         #Tải phần loading cho dự đoán
         with st.spinner("Predicting..."):
-            img = preprocess_image(img)
-            predictions = model.predict(img)
-            print(predictions)
-            confidence = np.max(predictions)
-            if confidence < THRESHOLD:
-                ppredicted_class = "Uncertain Prediction"
-            else:
-                
-                predicted_class =class_names[np.argmax(predictions)]
-        st.success(f"Prediction: {predicted_class} (Confidence: {confidence:.2f})")
-        
-        
+            img_input = preprocess_image(img)
+
+        # du doan hinh
+        prediction = model.predict(img_input)
+        predicted_probs = tf.nn.softmax(prediction[0])
+
+        # Get top 2 predictions
+        top_2_indices = np.argsort(predicted_probs)[-2:]
+        top_1_prob = predicted_probs[top_2_indices[1]]
+        top_2_prob = predicted_probs[top_2_indices[0]]
+
+        PROBABILITY_GAP = 0.3  # top prediction should be at least 30% higher
+
+        if top_1_prob < 0.6 or (top_1_prob - top_2_prob) < PROBABILITY_GAP:
+            # Use st.error instead of print for Streamlit
+            st.error("❌ ERROR: Ambiguous or invalid image!")
+            st.warning(f"Top prediction: {top_1_prob:.2%}, Second: {top_2_prob:.2%}")
+            st.info("Please provide a clear ASL hand sign image.")
+        else:
+            predicted_class = class_names[top_2_indices[1]]
+            confidence = top_1_prob.numpy()  # Convert to Python float
+            
+            st.success(
+                f"✅ Prediction: **{predicted_class}** "
+                f"(Confidence: {confidence * 100:.2f}%)"
+            )
+            
+            # Optional: Show top 3 predictions
+            st.write("### Top 3 Predictions:")
+            top_3_indices = np.argsort(predicted_probs)[-3:][::-1]
+            for idx in top_3_indices:
+                st.write(f"- {class_names[idx]}: {predicted_probs[idx]:.2%}")
